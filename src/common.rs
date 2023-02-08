@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: Copyright (c) 2666680 Ontario Inc. All rights reserved.
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: GPL-2.0
 //! This is the commonly used types inside the GVM guest program.
 //!
 //! The host can only send 2 types of messages into the GVM guest program,

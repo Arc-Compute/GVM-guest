@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: Copyright (c) 2666680 Ontario Inc. All rights reserved.
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: GPL-2.0
 //! This handles the low level host -> guest communications.
 //!
 //! NOTE: ALL OF THESE FUNCTIONS HAVE POTENTIALLY DANGEROUS SIDE EFFECTS.

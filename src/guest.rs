@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: Copyright (c) 2666680 Ontario Inc. All rights reserved.
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: GPL-2.0
 //! This is the crate for handling different VMs running with
 //! the GVM/LibVF.IO stack. The structure is permissive to allow
 //! individuals to use partially proprietary blobs in their internal

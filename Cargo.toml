@@ -1,12 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2666680 Ontario Inc. All rights reserved.
-# SPDX-License-Identifier: GPL-3.0
+# SPDX-License-Identifier: GPL-2.0
 
 [package]
 name = "gvm-guest"
 version = "0.1.0"
 edition = "2021"
 authors = ["2666680 Ontario Inc.", "Michael Buchel <michael@arccompute.io>"]
-license = "GPL-3.0"
+license = "GPL-2.0"
 
 [[bin]]
 name = "gvm-guest"
