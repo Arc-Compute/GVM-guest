@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: Copyright (c) 2666680 Ontario Inc. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0
 //! This code is specific to the networking NIC section of the VM.
 //!
 //! The procedure for adding in a networking NIC is as follows:

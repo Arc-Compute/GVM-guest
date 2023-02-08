@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: Copyright (c) 2666680 Ontario Inc. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0
 //! This is the linux specific component of GVM guest programs.
 //!
 //! 1. init_net - Implemented inside the networking module, and supports both systemd and
