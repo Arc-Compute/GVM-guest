@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2666680 Ontario Inc. All rights reserved.
- * SPDX-License-Identifier: GPL-3.0
+ * SPDX-License-Identifier: GPL-2.0
  *
  * Reason: Because rust cannot handle /dev devices correctly.
  */
@@ -12,7 +12,7 @@
 
 // Internal file descriptor to talk with host.
 static int fd = -1;
-static char buffer[1024];
+static char buffer[1024]; // TODO: Make this unlimited size eventually.
 
 /*
  * init_comms - Initializes the communication layer to be used for host -> guest comms.

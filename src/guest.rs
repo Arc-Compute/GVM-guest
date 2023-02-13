@@ -32,19 +32,19 @@ mod common;
 #[cfg(target_os = "linux")]
 mod linux;
 
-use std::{ffi::CStr, ffi::CString, path::Path};
-use std::os::raw::c_char;
 use dlopen::wrapper::{Container, WrapperApi};
+use std::os::raw::c_char;
+use std::{ffi::CStr, ffi::CString, path::Path};
 
 // Common imports for gvm-guest
-use crate::common::{GVMError, GVMCmd, Command, Network, PluginMsg};
+use crate::common::{Command, GVMCmd, GVMError, Network, PluginMsg};
 use std::collections::HashMap;
 use std::result::Result;
 
 #[cfg(target_os = "linux")]
-use crate::linux::networking::init_net;
-#[cfg(target_os="linux")]
 use crate::linux::comms::{init_communications, read_string, write_command};
+#[cfg(target_os = "linux")]
+use crate::linux::networking::init_net;
 
 /// This API is exposed by shared library files on the guest in question.
 /// We use this api to expose additional, potentially proprietary guest specific
@@ -54,38 +54,57 @@ pub struct PluginApi {
     /// Plugin initialization code, it creates a persistent state in the library.
     ///
     /// NOTE: The return MUST be statically allocated string as it will NOT be freed.
-    start : unsafe extern "C" fn() -> *const c_char,
+    start: unsafe extern "C" fn() -> *const c_char,
     /// Processes a command through the plugin API.
     ///
     /// NOTE: The return MUST be dynamically allocated string as it will be freed.
-    cmd_process : unsafe extern "C" fn (msg : *const c_char) -> *const c_char,
+    cmd_process: unsafe extern "C" fn(msg: *const c_char) -> *const c_char,
     /// Shuts down the persistent state in the library.
     ///
     /// NOTE: The return MUST be statically allocated string as it will NOT be freed.
-    stop : unsafe extern "C" fn() -> *const c_char
+    stop: unsafe extern "C" fn() -> *const c_char,
 }
 
 fn main() -> Result<(), GVMError> {
-    let mut plugins : HashMap<String, Container<PluginApi>> = HashMap::new();
+    let mut plugins: HashMap<String, Container<PluginApi>> = HashMap::new();
 
     init_communications()?;
 
-    write_command(Command { cmd : GVMCmd::GetNetwork, resp : None, finished : None})?;
+    write_command(Command {
+        cmd: GVMCmd::GetNetwork,
+        resp: None,
+        finished: None,
+    })?;
     loop {
-        let nets_res : Result<Vec<Network>, serde_json::Error> = serde_json::from_str(&read_string()?);
+        let nets_res: Result<Vec<Network>, serde_json::Error> =
+            serde_json::from_str(&read_string()?);
 
         if nets_res.is_err() {
             continue;
         }
 
         let nets = nets_res.unwrap();
-        init_net(&nets)?;
+        let res = init_net(&nets);
+        let mut resp = None;
+        let mut fin = Some(true);
+
+        if res.is_err() {
+            resp = Some(res.unwrap_err().to_string());
+            fin = Some(false);
+        }
+
+        write_command(Command {
+            cmd: GVMCmd::GetNetwork,
+            resp: resp,
+            finished: fin,
+        })?;
+
         println!("Initialized nets: {:#?}", nets);
         break;
     }
 
     loop {
-        let command_res : Result<PluginMsg, serde_json::Error> =
+        let command_res: Result<PluginMsg, serde_json::Error> =
             serde_json::from_str(&read_string()?);
 
         if command_res.is_err() {
@@ -94,7 +113,7 @@ fn main() -> Result<(), GVMError> {
 
         let command = command_res.unwrap();
         let mut fin = false;
-        let mut resp : Option<String> = None;
+        let mut resp: Option<String> = None;
 
         match command.cmd {
             GVMCmd::CreatePluginLinks => {
@@ -102,73 +121,84 @@ fn main() -> Result<(), GVMError> {
                     let name = &command.plugin;
                     if !Path::new(name).exists() {
                         println!("Got error: {:?}", GVMError::PluginNotFound);
-                        continue;
+                        resp = Some(GVMError::PluginNotFound.to_string());
+                    } else {
+                        let api = unsafe { Container::load(&name) };
+                        if api.is_err() {
+                            resp = Some(GVMError::PluginNotFound.to_string());
+                        } else {
+                            plugins.insert(name.to_string(), api.unwrap());
+                            fin = true;
+                        }
                     }
-                    plugins.insert(
-                        name.to_string(),
-                        unsafe {
-                            Container::load(&name)
-                        }.expect("Could not open library or load symbols")
-                    );
-                    fin = true;
                 } else {
                     println!("Plugin already loaded");
+                    resp = Some(GVMError::PluginLoaded.to_string());
                 }
-            },
+            }
             GVMCmd::StartPlugin => {
                 if plugins.contains_key(&command.plugin) {
-                    let c_buf : *const c_char = unsafe { plugins[&command.plugin].start() };
+                    let c_buf: *const c_char = unsafe { plugins[&command.plugin].start() };
                     if !c_buf.is_null() {
-                        let c_str : &CStr = unsafe { CStr::from_ptr(c_buf) };
-                        let str_slice : &str = c_str.to_str().unwrap();
-                        let str_buf : String = str_slice.to_owned();
+                        let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
+                        let str_slice: &str = c_str.to_str().unwrap();
+                        let str_buf: String = str_slice.to_owned();
                         resp = Some(str_buf);
                     }
                     fin = true;
                 } else {
                     println!("Plugin not loaded");
+                    resp = Some(GVMError::PluginNotFound.to_string());
                 }
-            },
+            }
             GVMCmd::PluginCmd => {
                 if plugins.contains_key(&command.plugin) {
                     if command.msg.is_some() {
                         let cstr = CString::new(command.msg.unwrap()).unwrap();
-                        let c_buf : *const c_char = unsafe {
-                            plugins[&command.plugin].cmd_process(cstr.as_ptr())
-                        };
+                        let c_buf: *const c_char =
+                            unsafe { plugins[&command.plugin].cmd_process(cstr.as_ptr()) };
                         if !c_buf.is_null() {
-                            let c_str : &CStr = unsafe { CStr::from_ptr(c_buf) };
-                            let str_slice : &str = c_str.to_str().unwrap();
-                            let str_buf : String = str_slice.to_owned();
+                            let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
+                            let str_slice: &str = c_str.to_str().unwrap();
+                            let str_buf: String = str_slice.to_owned();
                             resp = Some(str_buf);
                         }
                         fin = true;
                     }
                 } else {
                     println!("Plugin not loaded");
+                    resp = Some(GVMError::PluginNotFound.to_string());
                 }
-            },
+            }
             GVMCmd::StopPlugin => {
                 if plugins.contains_key(&command.plugin) {
                     unsafe { plugins[&command.plugin].stop() };
-                    let c_buf : *const c_char = unsafe { plugins[&command.plugin].stop() };
+                    let c_buf: *const c_char = unsafe { plugins[&command.plugin].stop() };
                     if !c_buf.is_null() {
-                        let c_str : &CStr = unsafe { CStr::from_ptr(c_buf) };
-                        let str_slice : &str = c_str.to_str().unwrap();
-                        let str_buf : String = str_slice.to_owned();
+                        let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
+                        let str_slice: &str = c_str.to_str().unwrap();
+                        let str_buf: String = str_slice.to_owned();
                         resp = Some(str_buf);
                     }
                     fin = true;
                 } else {
                     println!("Plugin not loaded");
+                    resp = Some(GVMError::PluginNotFound.to_string());
                 }
-            },
+            }
             GVMCmd::ShutdownGuest => {
                 break;
-            },
-            _ => println!("Unsupported plugin command: {:#?}", command)
+            }
+            _ => {
+                println!("Unsupported plugin command: {:#?}", command);
+                resp = Some(GVMError::PluginCommandNotSupported.to_string());
+            }
         };
-        write_command(Command { cmd : command.cmd, resp : resp, finished : Some(fin) })?;
+        write_command(Command {
+            cmd: command.cmd,
+            resp: resp,
+            finished: Some(fin),
+        })?;
     }
 
     Ok(())
