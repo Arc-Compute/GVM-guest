@@ -40,6 +40,8 @@ use std::{ffi::CStr, ffi::CString, path::Path};
 use crate::common::{Command, GVMCmd, GVMError, Network, PluginMsg};
 use std::collections::HashMap;
 use std::result::Result;
+use std::fs::File;
+use std::io::Write;
 
 #[cfg(target_os = "linux")]
 use crate::linux::comms::{init_communications, read_string, write_command};
@@ -70,38 +72,43 @@ fn main() -> Result<(), GVMError> {
 
     init_communications()?;
 
-    write_command(Command {
-        cmd: GVMCmd::GetNetwork,
-        resp: None,
-        finished: None,
-    })?;
-    loop {
-        let nets_res: Result<Vec<Network>, serde_json::Error> =
-            serde_json::from_str(&read_string()?);
-
-        if nets_res.is_err() {
-            continue;
-        }
-
-        let nets = nets_res.unwrap();
-        let res = init_net(&nets);
-        let mut resp = None;
-        let mut fin = Some(true);
-
-        if res.is_err() {
-            resp = Some(res.unwrap_err().to_string());
-            fin = Some(false);
-        }
-
+    if !Path::new("/tmp/init-nets").exists() {
         write_command(Command {
             cmd: GVMCmd::GetNetwork,
-            resp: resp,
-            finished: fin,
+            resp: None,
+            finished: None,
         })?;
+        loop {
+            let nets_res: Result<Vec<Network>, serde_json::Error> =
+                serde_json::from_str(&read_string()?);
 
-        println!("Initialized nets: {:#?}", nets);
-        break;
+            if nets_res.is_err() {
+                continue;
+            }
+
+            let nets = nets_res.unwrap();
+            let res = init_net(&nets);
+            let mut resp = None;
+            let mut fin = Some(true);
+
+            if res.is_err() {
+                resp = Some(res.unwrap_err().to_string());
+                fin = Some(false);
+            }
+
+            write_command(Command {
+                cmd: GVMCmd::GetNetwork,
+                resp: resp,
+                finished: fin,
+            })?;
+
+            println!("Initialized nets: {:#?}", nets);
+            break;
+        }
     }
+
+    let mut file = File::create("/tmp/init-nets").unwrap();
+    let _ = file.write_all(b"Inited networkined");
 
     loop {
         let command_res: Result<PluginMsg, serde_json::Error> =
